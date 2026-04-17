@@ -6,6 +6,7 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/volcapi/config"
 	"github.com/volcapi/executor"
+	"github.com/volcapi/ui"
 )
 
 // runCmd represents the run command
@@ -41,5 +42,26 @@ func runRun(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
-	return executor.Run(conf)
+	results, err := executor.Run(conf)
+	if err != nil {
+		fmt.Printf("Error: %s\n", err.Error())
+		return nil
+	}
+
+	printResults(results)
+
+	return nil
+}
+
+func printResults(results []executor.Result) {
+	for _, result := range results {
+		fmt.Printf("\n%s %s\n", result.Method, result.Endpoint)
+		for _, scenario := range result.Scenarios {
+			if scenario.Success {
+				fmt.Printf("  %s %s (%dms) - %s\n", ui.SymbolPass(), scenario.Name, scenario.Millisecond, scenario.Message)
+				continue
+			}
+			fmt.Printf("  %s %s - %s\n", ui.SymbolFail(), scenario.Name, scenario.Message)
+		}
+	}
 }

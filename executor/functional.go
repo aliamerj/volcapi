@@ -11,34 +11,26 @@ import (
 	"strings"
 	"time"
 
-	"github.com/fatih/color"
 	"github.com/volcapi/config"
 	"github.com/volcapi/ui"
 )
 
-var (
-	cGreen = color.New(color.FgHiGreen)
-	cRed   = color.New(color.FgHiRed)
-	cGray  = color.New(color.FgHiBlack)
-)
-
-func runFunctional(endpoint, method, scenarioName string, scenario config.Scenario) error {
+func runFunctional(endpoint, method, scenarioName string, scenario config.Scenario) (int, error) {
 	label := fmt.Sprintf("%s [%s %s]", scenarioName, method, endpoint)
 	spin := ui.ShowSpinner(label)
 
 	bodyBytes, err := requestBody(scenario)
 	if err != nil {
 		spin.Stop()
-		fmt.Printf("   %s %s  request body build failed\n", ui.SymbolFail(), cRed.Sprintf(scenarioName))
-		return err
+		return 0, fmt.Errorf("%s:Failed to build request body: %s", scenarioName, err.Error())
 	}
 
 	req, err := http.NewRequest(method, endpoint, bytes.NewReader(bodyBytes))
 	if err != nil {
 		spin.Stop()
-		fmt.Printf("   %s %s  request build failed\n", ui.SymbolFail(), cRed.Sprintf(scenarioName))
-		return err
+		return 0, fmt.Errorf("%s:Failed to build request body: %s", scenarioName, err.Error())
 	}
+
 	for key, value := range scenario.Headers {
 		req.Header.Set(key, value)
 	}
@@ -49,26 +41,23 @@ func runFunctional(endpoint, method, scenarioName string, scenario config.Scenar
 	elapsed := time.Since(start)
 	spin.Stop()
 	if err != nil {
-		fmt.Printf("   %s %s  %s\n", ui.SymbolFail(), cRed.Sprintf(scenarioName), cRed.Sprintf(err.Error()))
-		return err
+		return 0, fmt.Errorf("%s: %s", scenarioName, err.Error())
 	}
+
 	defer resp.Body.Close()
 
 	respBody, _ := io.ReadAll(resp.Body)
 
 	if scenario.Response.Status != nil && *scenario.Response.Status != resp.StatusCode {
 		err := fmt.Errorf("status mismatch (expected %d, got %d)", *scenario.Response.Status, resp.StatusCode)
-		fmt.Printf("   %s %s  %s  %s\n", ui.SymbolFail(), cRed.Sprintf(scenarioName), cRed.Sprintf(err.Error()), cGray.Sprintf("(%v)", elapsed.Truncate(time.Millisecond)))
-		return err
+		return 0, fmt.Errorf("%s: %s", scenarioName, err.Error())
 	}
 
 	if err := validateResponseBody(resp, respBody, scenario.Response); err != nil {
-		fmt.Printf("   %s %s  %s  %s\n", ui.SymbolFail(), cRed.Sprintf(scenarioName), cRed.Sprintf(err.Error()), cGray.Sprintf("(%v)", elapsed.Truncate(time.Millisecond)))
-		return err
+		return 0, fmt.Errorf("%s: %s", scenarioName, err.Error())
 	}
 
-	fmt.Printf("   %s %s  %s\n", ui.SymbolPass(), cGreen.Sprintf(scenarioName), cGray.Sprintf("(%v)", elapsed.Truncate(time.Millisecond)))
-	return nil
+	return int(elapsed.Truncate(time.Millisecond)), nil
 }
 
 func requestBody(scenario config.Scenario) ([]byte, error) {

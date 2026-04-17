@@ -9,37 +9,66 @@ import (
 	"github.com/volcapi/config"
 )
 
-func Run(cfg *config.Config) error {
+type scenarioResult struct {
+	Name        string
+	Success     bool
+	Message     string
+	Millisecond int
+}
+
+type Result struct {
+	Method    string
+	Endpoint  string
+	Scenarios []scenarioResult
+}
+
+func Run(cfg *config.Config) ([]Result, error) {
 	if len(cfg.Endpoints) == 0 {
-		return fmt.Errorf("no testable endpoints were found; provide an OpenAPI file with v-functional-test scenarios")
+		return nil, fmt.Errorf("no testable endpoints were found; provide an OpenAPI file with v-functional-test scenarios")
 	}
 
-	failed := 0
-	total := 0
+	results := make([]Result, 0, len(cfg.Endpoints))
 
 	for _, endpoint := range cfg.Endpoints {
+		result := Result{
+			Endpoint: cfg.Host + endpoint.Path,
+			Method:   endpoint.Method,
+		}
+		var scenarios []scenarioResult
+
 		for _, scenarioName := range endpoint.Scenarios {
-			total++
 			scenario, ok := cfg.Scenarios[scenarioName]
 			if !ok {
-				fmt.Printf("   ✖ %s  scenario not found\n", scenarioName)
-				failed++
+				scenarios = append(scenarios, scenarioResult{
+					Name:    scenarioName,
+					Success: false,
+					Message: fmt.Sprintf("%s  scenario not found\n", scenarioName),
+				})
 				continue
 			}
 
 			requestURL := buildRequestURL(cfg.Host+endpoint.Path, scenario)
-			if err := runFunctional(requestURL, endpoint.Method, scenarioName, scenario); err != nil {
-				failed++
+			Millisecond, err := runFunctional(requestURL, endpoint.Method, scenarioName, scenario)
+			if err != nil {
+				scenarios = append(scenarios, scenarioResult{
+					Name:    scenarioName,
+					Success: false,
+					Message: err.Error(),
+				})
 			}
+			scenarios = append(scenarios, scenarioResult{
+				Name:        scenarioName,
+				Success:     true,
+				Millisecond: Millisecond,
+				Message:     fmt.Sprintf("%s passed", scenarioName),
+			})
 		}
+		result.Scenarios = scenarios
+
+		results = append(results, result)
 	}
 
-	if failed > 0 {
-		return fmt.Errorf("test run completed with %d/%d failed scenarios", failed, total)
-	}
-
-	fmt.Printf("\n✔ All scenarios passed (%d/%d)\n", total-failed, total)
-	return nil
+	return results, nil
 }
 
 func buildRequestURL(rawPath string, scenario config.Scenario) string {
