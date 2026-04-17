@@ -3,58 +3,34 @@
   <p><strong>OpenAPI-Native API Testing Tool Built in Go</strong></p>
 </div>
 
-**VolcAPI** is a modern, configuration-driven API testing tool that makes your OpenAPI specifications executable. Define your tests once in your OpenAPI spec, run them anywhere—local development, CI/CD pipelines, or production monitoring.
-
-At its core, VolcAPI transforms static API documentation into living, automated test suites. Whether you're a backend developer validating endpoints or a DevOps engineer setting up CI/CD, VolcAPI provides the tools to ensure your APIs work as expected.
-
-This is **v0.1.0-alpha**, the foundation for a comprehensive API testing platform that aims to unify functional testing, performance testing, and monitoring.
-
-This tool is built for developers who want fast, reliable API testing without the complexity of multiple tools.
+**Your OpenAPI spec is already your test suite. You just can't run it yet.**
+ 
+VolcAPI is a Go CLI that makes OpenAPI specs executable — define test scenarios directly inside your spec, run them from the terminal or CI, get pass/fail output. No separate Postman collection to maintain. No extra config files to sync.
 
 ---
 
-## 🎯 Why VolcAPI?
-
-Development teams currently struggle with:
-- **Tool Fragmentation**: Using Postman for functional tests, K6 for performance, separate monitoring tools
-- **Double Maintenance**: OpenAPI specs for documentation, separate test configs for validation
-- **Poor CI/CD Integration**: Existing tools don't fit modern development workflows
-- **Environment Management**: Manual config switching between local/staging/production
-
-**VolcAPI solves this** by making your OpenAPI specification the single source of truth for both documentation and testing.
-
+```bash
+volcapi run volcapi_local.yml -o openapi.yml
+```
+ 
+---
+ 
+> ⚠️ **This is an early alpha.** Core GET/POST/PUT/DELETE testing works. CI output formats (JUnit XML, JSON) are in active development. If the problem resonates with you, star/watch the repo — that directly helps me prioritize.
+ 
+---
+## The problem
+ 
+You maintain your API in two places:
+ 
+1. The **OpenAPI spec** — for docs, codegen, and communication
+2. A **Postman collection / test script** — for actual validation
+They drift. They contradict each other. You update one and forget the other. Every developer on your team has a different version of the collection locally.
+ 
+VolcAPI collapses this into one file. Your spec defines the API. Your spec runs the tests.
+ 
 ---
 
-## 🚀 Key Features
 
-### ✅ Currently Available (v0.1.0-alpha)
-1. **OpenAPI-Native Testing**
-   - Parse OpenAPI 3.x specifications
-   - Define test scenarios directly in your spec using `v-functional-test` extensions
-   - Auto-validate requests and responses against your API schema
-
-2. **Flexible Scenario Management**
-   - Define reusable test scenarios in OpenAPI spec or separate config files
-   - Support for headers, query parameters, request bodies
-   - Response validation with JSON matching and contains checks
-
-3. **Environment Configuration**
-   - Separate config files for different environments (`volcapi_local.yml`, `volcapi_staging.yml`)
-   - Environment variable support
-   - Custom host URLs per environment
-
-4. **Developer-Friendly CLI**
-   - Simple command structure
-   - Support for local files and remote URLs
-   - Clean, readable output
-
-### 🚧 Coming Soon
-- **Performance Testing**: Load testing with configurable scenarios
-- **Monitoring**: Continuous API health checks with alerting
-- **Advanced Validations**: Schema validation, regex patterns, type checking
-- **Multiple Output Formats**: JSON, JUnit XML for CI/CD integration
-- **Web Dashboard**: Historical results and team collaboration
-- **Integrations**: Grafana, Slack, GitHub Actions
 ### Technical Architecture: my vision
 ```
 ┌─────────────────────────────────────────────────────────┐
@@ -81,44 +57,25 @@ Development teams currently struggle with:
 ```
 ---
 
-## 📖 Getting Started
-
-### Prerequisites
-
-Make sure you have **Go 1.21+** installed:
-```bash
-go version
-```
-
-### Installation
-
-**Option 1: Install from source**
-```bash
-git clone https://github.com/volcapi/volcapi.git
-cd volcapi
-go build -o volcapi
-sudo mv volcapi /usr/local/bin/
-```
-
-**Option 2: Go install (when available)**
-```bash
-go install github.com/volcapi/volcapi@latest
-```
-
-### Quick Start
-
-1. **Create your OpenAPI spec with test scenarios:**
-
+## How it works
+ 
+Add a `v-functional-test` extension to any endpoint in your spec:
+ 
 ```yaml
-# openapi.yml
-openapi: 3.0.3
-info:
-  title: My API
-  version: 1.0.0
-servers:
-  - url: https://api.example.com
-
-# Define reusable scenarios
+paths:
+  /auth/login:
+    post:
+      summary: User login
+      responses:
+        '200':
+          description: Success
+      v-functional-test:
+        scenarios: ["valid_login", "wrong_password"]
+```
+ 
+Define scenarios at the root level of the same spec (or in a separate config):
+ 
+```yaml
 scenarios:
   valid_login:
     headers:
@@ -130,144 +87,93 @@ scenarios:
       status: 200
       body:
         contains: ["token", "user"]
-
-paths:
-  /auth/login:
-    post:
-      summary: User login
-      responses:
-        '200':
-          description: Success
-      v-functional-test:
-        scenarios: ["valid_login"]
-```
-
-2. **Create environment config:**
-
-```yaml
-# volcapi_local.yml
-host: http://localhost:3000
-
-scenarios:
-  # Additional local-specific scenarios
-  test_user:
-    headers:
-      Authorization: Token ${TOKEN}
+ 
+  wrong_password:
+    request:
+      email: user@example.com
+      password: wrong
     response:
-      status: 200
-
-env:
-  TOKEN: your_local_token_here
+      status: 401
 ```
-
-3. **Run your tests:**
-
+ 
+Run it:
+ 
 ```bash
-# Run tests with OpenAPI spec
 volcapi run volcapi_local.yml -o openapi.yml
 ```
-
+ 
+That's it. Your spec is now a test runner.
+ 
 ---
-
-## 📚 Configuration Guide
-
-### OpenAPI Extensions
-
-VolcAPI uses custom OpenAPI extensions to define test scenarios:
-
-```yaml
-paths:
-  /api/users/{id}:
-    get:
-      summary: Get user by ID
-      responses:
-        '200':
-          description: Success
-      
-      # VolcAPI test scenarios
-      v-functional-test:
-        scenarios: ["get_valid_user", "get_invalid_user"]
-
-# Define scenarios at the root level
-scenarios:
-  get_valid_user:
-    query:
-      id: 123
-    headers:
-      Accept: application/json
-    response:
-      status: 200
-      body:
-        json:
-          id:
-            value: 123
-          email:
-            exists: true
-
-  get_invalid_user:
-    query:
-      id: 99999
-    response:
-      status: 404
-```
-
-### Environment Configuration
-
+ 
+## Environment config
+ 
+Point at different hosts per environment. Use environment variables for secrets:
+ 
 ```yaml
 # volcapi_local.yml
 host: http://localhost:3000
-
-# Environment-specific scenarios
-scenarios:
-  auth_test:
-    headers:
-      Authorization: Bearer ${API_TOKEN}
-    response:
-      status: 200
-
-# Environment variables
 env:
-  API_TOKEN: your_token_here
-  MAX_TIMEOUT: "30"
+  API_TOKEN: your_local_token
+ 
+# volcapi_staging.yml
+host: https://staging.api.example.com
+env:
+  API_TOKEN: ${STAGING_TOKEN}  # from CI secrets
 ```
-
-### Response Validation
-
-**Check specific values:**
-```yaml
-response:
-  status: 200
-  body:
-    json:
-      user:
-        object:
-          name:
-            value: "John Doe"
-          email:
-            value: "john@example.com"
-```
-
-**Check field existence:**
-```yaml
-response:
-  body:
-    contains: ["user_id", "email", "token"]
-```
-
-**Validate nested objects:**
-```yaml
-response:
-  body:
-    json:
-      headers:
-        object:
-          Accept:
-            value: "application/json"
-          Host:
-            value: "api.example.com"
-```
-
+ 
 ---
+ 
+## Installation
+ 
+**Requires Go 1.21+**
+ 
+```bash
+git clone https://github.com/aliamerj/volcapi.git
+cd volcapi
+go build -o volcapi
+sudo mv volcapi /usr/local/bin/
+```
+ 
+---
+ 
+## What works today
+ 
+| Feature | Status |
+|---|---|
+| OpenAPI 3.x parsing | ✅ |
+| GET / POST / PUT / DELETE | ✅ |
+| Response status validation | ✅ |
+| JSON body validation (exact + contains) | ✅ |
+| Environment variable substitution | ✅ |
+| Multiple environments (local/staging/prod) | ✅ |
+| JUnit XML output (for GitHub Actions) | 🔨 In progress |
+| JSON output format | 🔨 In progress |
+| GitHub Actions example | 🔨 In progress |
+ 
+---
+ 
+## What's next (and why it matters)
+ 
+The immediate goal is making VolcAPI a first-class CI/CD tool:
+ 
+- **JUnit XML output** — so GitHub Actions, GitLab CI, and Jenkins can parse results natively
+- **GitHub Actions workflow** — copy-paste ready, zero config
+- **Contract validation** — fail CI when your API response no longer matches what the spec says it returns
+Longer term: gRPC support, performance testing, eBPF-based profiling. But those come after the CI story is solid.
+ 
+---
+ 
+## Why Go?
+ 
+Most API testing tooling is JavaScript or Python. Go gives you:
+ 
+- A single static binary — no runtime, no `node_modules`, no virtualenv
+- Fast startup — matters in CI where you're paying per second
+- Easy to distribute — `go install` or download a binary, done
+---
+
+
 
 ## 🔧 CLI Reference
 
@@ -381,71 +287,25 @@ jobs:
           go-version: '1.21'
       
       - name: Install VolcAPI
-        run: go install github.com/yourusername/volcapi@latest
+        run: go install github.com/aliamerj/volcapi@latest
       
       - name: Run API Tests
         env:
           STAGING_TOKEN: ${{ secrets.STAGING_TOKEN }}
         run: volcapi run volcapi_staging.yml -o openapi.yml
 ```
-
 ---
 
-## 🛣️ Roadmap
-
-### ✅ Phase 1 (Current - v0.1.0-alpha)
-- [x] OpenAPI 3.x parsing
-- [x] Basic functional testing (GET requests)
-- [x] Environment configuration system
-- [x] Response validation (status, JSON matching)
-- [x] CLI tool with basic commands
-- [x] POST/PUT/DELETE request support
-- [ ] JUnit XML output (for CI/CD integration)
-- [ ] JSON output format (for parsing)
-- [ ] GitHub Actions example (copy-paste ready)
-
-### 🚧 Phase 2
-- [ ] Performance/load testing
-- [ ] Multiple output formats (JSON, JUnit)
-- [ ] Web dashboard for results
-- [ ] Grafana integration
-- [ ] GitHub Actions marketplace
-
-### 🔮 Phase 3 (6+ months)
-- [ ] Continuous monitoring
-- [ ] Slack/Discord alerts
-- [ ] Team collaboration features
-- [ ] Advanced analytics
-- [ ] OpenAPI 3.1 support
-
----
-
-## 🤝 Contributing
-
-Contributions are welcome! Here's how you can help:
-
-1. **Report Bugs**: Open an issue with details and reproduction steps
-2. **Suggest Features**: Share your ideas in GitHub Issues
-3. **Submit PRs**: Fork the repo, make changes, submit a pull request
-4. **Improve Docs**: Help make documentation clearer
-
-### Development Setup
-
+## Contributing
+ 
+The project is early and the roadmap is shaped by real feedback. If you hit a bug, want a feature, or just want to say "yes this problem is real" — open an issue. That feedback directly influences what gets built next.
+ 
 ```bash
-# Clone the repository
-git clone https://github.com/yourusername/volcapi.git
+git clone https://github.com/aliamerj/volcapi.git
 cd volcapi
-
-# Install dependencies
 go mod download
-
-# Run tests
 go test ./...
-
-# Build
 go build -o volcapi
-
-# Run locally
 ./volcapi run volcapi_local.yml -o openapi.yml
 ```
 
