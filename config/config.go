@@ -13,10 +13,12 @@ import (
 
 type Config struct {
 	Host      string
-	Path      map[string]Path
+	Endpoints []EndpointConfig
 	Scenarios map[string]Scenario
 }
-type Path struct {
+
+type EndpointConfig struct {
+	Path      string
 	Method    string
 	Scenarios []string
 }
@@ -62,7 +64,6 @@ type JNode struct {
 }
 
 type Endpoint struct {
-	Method         string
 	FunctionalTest struct {
 		Scenarios []string `yaml:"scenarios"`
 	} `yaml:"v-functional-test"`
@@ -73,9 +74,9 @@ type OpenAPI struct {
 	Path      map[string]map[string]Endpoint `yaml:"paths"`
 }
 
-func Parse(configPath, openApiPath string) (*Config, error) {
-	config := Config{
-		Path:      make(map[string]Path),
+func Parse(configPath, openAPIPath string) (*Config, error) {
+	cfg := Config{
+		Endpoints: []EndpointConfig{},
 		Scenarios: make(map[string]Scenario),
 	}
 
@@ -87,39 +88,45 @@ func Parse(configPath, openApiPath string) (*Config, error) {
 	if err := yaml.Unmarshal(data, &mc); err != nil {
 		return nil, fmt.Errorf("failed to parse yaml: %w", err)
 	}
-	config.Host = mc.Host
+	cfg.Host = strings.TrimRight(mc.Host, "/")
 	for k, sce := range mc.Scenarios {
-		config.Scenarios[k] = sce
+		cfg.Scenarios[k] = sce
 	}
 
-	oData, err := extractData(openApiPath)
-	if err != nil {
-		return nil, err
-	}
+	if openAPIPath != "" {
+		oData, err := extractData(openAPIPath)
+		if err != nil {
+			return nil, err
+		}
 
-	var openapi OpenAPI
-	if err := yaml.Unmarshal(oData, &openapi); err != nil {
-		return nil, fmt.Errorf("failed to parse openapi yaml: %w", err)
-	}
-	for k, sce := range openapi.Scenarios {
-		config.Scenarios[k] = sce
-	}
+		var openapi OpenAPI
+		if err := yaml.Unmarshal(oData, &openapi); err != nil {
+			return nil, fmt.Errorf("failed to parse openapi yaml: %w", err)
+		}
+		for k, sce := range openapi.Scenarios {
+			cfg.Scenarios[k] = sce
+		}
 
-	for path, val := range openapi.Path {
-		for method, endpoint := range val {
-			config.Path[path] = Path{
-				Method:    strings.ToUpper(method),
-				Scenarios: endpoint.FunctionalTest.Scenarios,
+		for path, val := range openapi.Path {
+			for method, endpoint := range val {
+				if len(endpoint.FunctionalTest.Scenarios) == 0 {
+					continue
+				}
+				cfg.Endpoints = append(cfg.Endpoints, EndpointConfig{
+					Path:      path,
+					Method:    strings.ToUpper(method),
+					Scenarios: endpoint.FunctionalTest.Scenarios,
+				})
 			}
 		}
 	}
 
-	for name, s := range config.Scenarios {
+	for name, s := range cfg.Scenarios {
 		s.addRequiredFields("", s.Response.Body.Json)
 		s.resolveScenarios(mc.Env)
-		config.Scenarios[name] = s
+		cfg.Scenarios[name] = s
 	}
-	return &config, nil
+	return &cfg, nil
 }
 
 func (s *Scenario) addRequiredFields(prefix string, body *map[string]JNode) {
@@ -156,34 +163,32 @@ func (s *Scenario) resolveScenarios(envMap map[string]string) {
 		s.Headers[k] = resolveString(v, envMap)
 	}
 	if s.Request.Json != nil {
-		json := *s.Request.Json
-		for k, v := range json {
+		jsonBody := *s.Request.Json
+		for k, v := range jsonBody {
 			if str, ok := v.(string); ok {
-				json[k] = resolveString(str, envMap)
-				s.Request.Json = &json
+				jsonBody[k] = resolveString(str, envMap)
+				s.Request.Json = &jsonBody
 			}
-			// todo: if value is map[string]any tell user to use json not value
 		}
 	}
 
 	if s.Response.Body.Json != nil {
-		s.handleJson(*s.Response.Body.Json, envMap)
+		s.handleJSON(*s.Response.Body.Json, envMap)
 	}
 }
 
-func (s *Scenario) handleJson(json map[string]JNode, envMap map[string]string) {
-	for key, val := range json {
+func (s *Scenario) handleJSON(jsonBody map[string]JNode, envMap map[string]string) {
+	for key, val := range jsonBody {
 		if str, ok := val.Value.(string); ok {
 			val.Value = resolveString(str, envMap)
 		}
 
-		// Warn user if they embedded maps directly in Value
 		if _, ok := val.Value.(map[string]any); ok {
-			fmt.Printf("⚠️  Warning: scenario %q: field %q has embedded object in 'value'. Use 'object' instead.\n", key, key)
+			fmt.Printf("⚠️  Warning: scenario field %q has embedded object in 'value'. Use 'object' instead.\n", key)
 		}
 
 		if _, ok := val.Value.([]map[string]any); ok {
-			fmt.Printf("⚠️  Warning: scenario %q: field %q has embedded object in 'value'. Use 'list' instead.\n", key, key)
+			fmt.Printf("⚠️  Warning: scenario field %q has embedded object in 'value'. Use 'list' instead.\n", key)
 		}
 
 		if s.Response.Body.Json == nil {
@@ -195,14 +200,13 @@ func (s *Scenario) handleJson(json map[string]JNode, envMap map[string]string) {
 		s.Response.Body.Json = &jsonMap
 
 		if len(val.Object) > 0 {
-			s.handleJson(val.Object, envMap)
+			s.handleJSON(val.Object, envMap)
 		}
 
 		for _, item := range val.List {
-			s.handleJson(item, envMap)
+			s.handleJSON(item, envMap)
 		}
 	}
-
 }
 
 func resolveString(val string, envMap map[string]string) string {
@@ -233,19 +237,20 @@ func extractData(path string) ([]byte, error) {
 	if strings.HasPrefix(path, "http://") || strings.HasPrefix(path, "https://") {
 		resp, err := http.Get(path)
 		if err != nil {
-			return nil, fmt.Errorf("Error fetching remote config: %v\n", err)
+			return nil, fmt.Errorf("error fetching remote config: %w", err)
 		}
 		defer resp.Body.Close()
 		data, err := io.ReadAll(resp.Body)
 		if err != nil {
-			return nil, fmt.Errorf("Error reading remote config: %v\n", err)
+			return nil, fmt.Errorf("error reading remote config: %w", err)
 		}
 		return data, nil
 	}
 
 	data, err := os.ReadFile(path)
 	if err != nil {
-		return nil, fmt.Errorf("Error reading config: %v\n", err)
+		return nil, fmt.Errorf("error reading config: %w", err)
 	}
 	return data, err
 }
+

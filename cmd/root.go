@@ -6,8 +6,6 @@ import (
 	"github.com/spf13/cobra"
 )
 
-
-
 var rootCmd = &cobra.Command{
 	Use:   "VolcAPI",
 	Short: "VolcAPI - CLI for API testing and monitoring",

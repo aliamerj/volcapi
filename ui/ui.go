@@ -8,17 +8,18 @@ import (
 )
 
 var (
-	cGreen  = color.New(color.FgHiGreen)
-	cRed    = color.New(color.FgHiRed)
-	cCyan   = color.New(color.FgHiCyan)
-	cYellow = color.New(color.FgHiYellow)
-	cGray   = color.New(color.FgHiBlack)
-	cBlue   = color.New(color.FgHiBlue)
-
-	symbolPass = cGreen.Sprint("✔")
-	symbolFail = cRed.Sprint("✖")
-	symbolFile = cYellow.Sprint("📄")
+	cGreen = color.New(color.FgHiGreen)
+	cRed   = color.New(color.FgHiRed)
+	cCyan  = color.New(color.FgHiCyan)
 )
+
+func SymbolPass() string {
+	return cGreen.Sprint("✔")
+}
+
+func SymbolFail() string {
+	return cRed.Sprint("✖")
+}
 
 func ShowSpinner(label string) *spinner.Spinner {
 	s := spinner.New(spinner.CharSets[14], 100*time.Millisecond)
@@ -27,3 +28,4 @@ func ShowSpinner(label string) *spinner.Spinner {
 	s.Start()
 	return s
 }
+

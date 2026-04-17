@@ -41,5 +41,5 @@ func runRun(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
-  return executor.Run(conf)
+	return executor.Run(conf)
 }
