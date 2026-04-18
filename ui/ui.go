@@ -59,6 +59,7 @@ func Section(title string) string {
 func ShowSpinner(label string) *spinner.Spinner {
 	s := spinner.New(spinner.CharSets[14], 100*time.Millisecond)
 	s.Suffix = " " + cCyan.Sprintf(label)
+	//nolint:errcheck
 	s.Color("cyan")
 	s.Start()
 	return s

@@ -399,7 +399,7 @@ func (b *Body) UnmarshalYAML(data []byte) error {
 	return nil
 }
 
-// extend UnmarshalYAML to supprot types
+// extend UnmarshalYAML to support types
 func (n *JNode) UnmarshalYAML(data []byte) error {
 	type rawJNode struct {
 		Value    any              `yaml:"value,omitempty"`
