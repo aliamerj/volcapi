@@ -14,6 +14,7 @@ type scenarioResult struct {
 	Success     bool
 	Message     string
 	Millisecond int
+	RequestURL  string
 }
 
 type Result struct {
@@ -40,9 +41,10 @@ func Run(cfg *config.Config) ([]Result, error) {
 			scenario, ok := cfg.Scenarios[scenarioName]
 			if !ok {
 				scenarios = append(scenarios, scenarioResult{
-					Name:    scenarioName,
-					Success: false,
-					Message: fmt.Sprintf("%s  scenario not found\n", scenarioName),
+					Name:       scenarioName,
+					Success:    false,
+					Message:    fmt.Sprintf("%s  scenario not found\n", scenarioName),
+					RequestURL: cfg.Host + endpoint.Path,
 				})
 				continue
 			}
@@ -51,16 +53,19 @@ func Run(cfg *config.Config) ([]Result, error) {
 			Millisecond, err := runFunctional(requestURL, endpoint.Method, scenarioName, scenario)
 			if err != nil {
 				scenarios = append(scenarios, scenarioResult{
-					Name:    scenarioName,
-					Success: false,
-					Message: err.Error(),
+					Name:       scenarioName,
+					Success:    false,
+					Message:    err.Error(),
+					RequestURL: requestURL,
 				})
+				continue
 			}
 			scenarios = append(scenarios, scenarioResult{
 				Name:        scenarioName,
 				Success:     true,
 				Millisecond: Millisecond,
 				Message:     fmt.Sprintf("%s passed", scenarioName),
+				RequestURL:  requestURL,
 			})
 		}
 		result.Scenarios = scenarios
@@ -101,4 +106,3 @@ func replacePathParams(path string, params map[string]string) string {
 		return match
 	})
 }
-

@@ -42,26 +42,60 @@ func runRun(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
-	results, err := executor.Run(conf)
-	if err != nil {
-		fmt.Printf("Error: %s\n", err.Error())
-		return nil
-	}
 
+	results, err := executor.Run(conf)
 	printResults(results)
+	if err != nil {
+		fmt.Println(err.Error())
+	}
 
 	return nil
 }
 
 func printResults(results []executor.Result) {
+	totalEndpoints := len(results)
+	totalScenarios := 0
+	passedScenarios := 0
+
+	fmt.Printf("\n%s\n", ui.Section("VolcAPI Results"))
+
 	for _, result := range results {
-		fmt.Printf("\n%s %s\n", result.Method, result.Endpoint)
+		endpointPassed := true
+		fmt.Printf("\n%s\n", ui.EndpointHeader(result.Method, result.Endpoint))
 		for _, scenario := range result.Scenarios {
+			totalScenarios++
 			if scenario.Success {
-				fmt.Printf("  %s %s (%dms) - %s\n", ui.SymbolPass(), scenario.Name, scenario.Millisecond, scenario.Message)
+				passedScenarios++
+				fmt.Printf("  %s %-24s %s %s\n", ui.SymbolPass(), scenario.Name, ui.Muted(fmt.Sprintf("%4dms", scenario.Millisecond)), ui.Muted(scenario.Message))
+				if scenario.RequestURL != "" && scenario.RequestURL != result.Endpoint {
+					fmt.Printf("    %s %s\n", ui.SymbolInfo(), ui.Muted(scenario.RequestURL))
+				}
 				continue
 			}
-			fmt.Printf("  %s %s - %s\n", ui.SymbolFail(), scenario.Name, scenario.Message)
+			endpointPassed = false
+			fmt.Printf("  %s %-24s %s\n", ui.SymbolFail(), scenario.Name, resultFailureMessage(scenario.Message))
+			if scenario.RequestURL != "" && scenario.RequestURL != result.Endpoint {
+				fmt.Printf("    %s %s\n", ui.SymbolInfo(), ui.Muted(scenario.RequestURL))
+			}
+		}
+
+		if endpointPassed {
+			fmt.Printf("  %s %s\n", ui.SymbolInfo(), ui.Muted("endpoint passed"))
+		} else {
+			fmt.Printf("  %s %s\n", ui.SymbolWarn(), ui.Muted("endpoint has failing scenarios"))
 		}
 	}
+
+	failedScenarios := totalScenarios - passedScenarios
+	fmt.Printf(
+		"\n%s\n  %s %s\n  %s %s\n  %s %s\n\n",
+		ui.Section("Summary"),
+		ui.SymbolInfo(), ui.Muted(fmt.Sprintf("endpoints: %d", totalEndpoints)),
+		ui.SymbolPass(), ui.Muted(fmt.Sprintf("passed: %d", passedScenarios)),
+		ui.SymbolFail(), ui.Muted(fmt.Sprintf("failed: %d", failedScenarios)),
+	)
+}
+
+func resultFailureMessage(message string) string {
+	return ui.Accent(message)
 }

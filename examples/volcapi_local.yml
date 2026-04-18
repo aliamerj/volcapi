@@ -1,4 +1,13 @@
-host: http://0.0.0.0
+# cli config also 
+host: http://localhost:8080
 env:
   TOKEN: YWxpOjEyMw==
   MAX: "13"
+
+# openapi: examples/openapi.yml
+
+# scenarios: examples/scenarios.yml 
+# or 
+# scenarios:
+#   users: examples/scenarios/user.yml
+#   reports: examples/scenarios/reports.yml

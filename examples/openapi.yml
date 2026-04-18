@@ -1,199 +1,293 @@
 openapi: 3.0.3
 info:
-  title: HttpBin Test API
+  title: VolcAPI Mock Test API
   version: 1.0.0
+
 servers:
-  - url: https://httpbin.org
+  - url: http://localhost:8080
 
-# Global scenarios defined inside openapi.yml
 scenarios:
-  valid_user:
-    params:
-      user: ali
-      passwd: 123
+  valid_login:
     headers:
-      Authorization: Basic $TOKEN
       Accept: application/json
+    request:
+      json:
+        email: user@example.com
+        password: password123
     response:
       status: 200
       body:
-        contains: ["authenticated", "user"]
-        json:
-          authenticated: 
-            value: true
-          user: 
-            value: ali
-  invalid_user:
-    params:
-      user: invalid
-      passwd: invalid
-    headers:
-      Accept: application/json
-      Authorization: Basic $TOKEN
-    response:
-      status: 401
- 
-  simple_get:
-      headers:
-        Accept: application/json
-      response:
-        status: 200
-        body:
-          contains: ["headers.Host"]
-          json:
-            headers:
-              object: 
-                Accept:
-                  value: "application/json"
-                Accept-Encoding:
-                  value: "gzip"
-                Host:
-                  value: "0.0.0.0"
-                User-Agent:
-                  value: "Go-http-client/1.1"
-            origin: 
-              value: "172.17.0.1"
-            url: 
-              value: "http://0.0.0.0/get"
-  simple_get_query:
-      query:
-        id: 132
-      headers:
-        Accept: application/json
-      response:
-        status: 200
-        body:
-          json:
-            headers:
-              object: 
-                Accept:
-                  value: "application/json"
-                Accept-Encoding:
-                  value: "gzip"
-                Host:
-                  value: "0.0.0.0"
-                User-Agent:
-                  value: "Go-http-client/1.1"
-            origin: 
-              value: "172.17.0.1"
-            url: 
-              value: "http://0.0.0.0/get?id=132"
-  
-  valid_token:
-    headers:
-      Accept: application/json
-      Authorization: Bearer valid_token
-    response:
-      status: 200
-      body:
-        json:
-          authenticated: 
-            value: true
-          token:
-            value: valid_token
+        contains: ["token", "user"]
+        user:
+          id: true
+          name: true
+          email: true
+          role: true
 
-  invalid_token:
+  invalid_login:
     headers:
       Accept: application/json
-      Authorization: invalid
+    request:
+      json:
+        email: user@example.com
+        password: wrongpassword
     response:
       status: 401
-  create_post:
+      body:
+        contains: ["error", "message"]
+        error:
+          value: "Unauthorized"
+        message:
+          value: "Invalid email or password"
+
+  get_users:
     headers:
       Accept: application/json
-    request:
-      json:
-        title: tesing api
-        content: testing api with volcapi is simple
+      Authorization: Bearer $TOKEN
     response:
+      status: 200
       body:
-        status: 200
-        json:
-          data:
-            value: '{"content":"testing api with volcapi is simple","title":"tesing api"}' 
-  put_post:
+        contains: ["data", "meta"]
+        data:
+          list:
+            id: true
+            name: true
+            email: true
+            status: true
+
+  get_user_unauthorized:
     headers:
       Accept: application/json
+    response:
+      status: 401
+      body:
+        contains: ["error", "message"]
+        error:
+          value: "Unauthorized"
+        message:
+          value: "Missing or invalid token"
+
+  get_user_by_id:
+    params:
+      id: 1
+    headers:
+      Accept: application/json
+      Authorization: Bearer $TOKEN
+    response:
+      status: 200
+      body:
+        contains: ["id", "name", "email", "status", "profile"]
+        id:
+          value: 1
+        status:
+          value: active
+
+  get_user_by_invalid_id:
+    params:
+      id: 999
+    headers:
+      Accept: application/json
+      Authorization: Bearer $TOKEN
+    response:
+      status: 404
+      body:
+        contains: ["error", "message"]
+        error:
+          value: "Not Found"
+        message:
+          value: "User with id 999 was not found"
+
+  create_user:
+    headers:
+      Accept: application/json
+      Content-Type: application/json
+      Authorization: Bearer $TOKEN
     request:
       json:
-        title: tesing api with VolcAPI
+        name: ali amer
+        email: user@example.com
+        password: password123
     response:
+      status: 201
       body:
-        status: 200
-        json:
-          data:
-            value: '{"title":"tesing api with VolcAPI"}'
-  delete_post:
+        contains: ["id", "name", "email", "status", "created_at"]
+
+  create_invalid_user:
+    headers:
+      Content-Type: application/json
+      Authorization: Bearer $TOKEN
+    request:
+      json:
+        name: ali amer
+        password: password123
+    response:
+      status: 422
+      body:
+        contains: ["error", "fields.email"]
+
+  update_user:
+    params:
+      id: 1
+    headers:
+      Content-Type: application/json
+      Authorization: Bearer $TOKEN
+    request:
+      json:
+        name: jeff uruken
+    response:
+      status: 200
+      body:
+        contains: ["id", "name", "email", "status", "updated_at"]
+
+  delete_user:
+    params:
+      id: 1
+    headers:
+      Authorization: Bearer $TOKEN
+    response:
+      status: 204
+
+  get_reports:
+    headers:
+      Authorization: Bearer $TOKEN
+    response:
+      status: 200
+      body:
+        contains: ["report", "status"]
+
+  get_reports_error:
+    response:
+      status: 500
+      body:
+        contains: ["error", "message"]
+
+  search_user:
     query:
-      postId: 150
-    headers:
-      Accept: application/json
+      page: 1
+      status: active
     response:
+      status: 200
       body:
-        status: 200
-        json:
-          args:
-            object:
-              postId: 
-                value: "150"
+        list:
+          id: true
+          name: true
+          status: true
+
+  get_dashboard_stats:
+    headers:
+      Content-Type: application/json
+      Authorization: Bearer $TOKEN
+    response:
+      status: 200
+      body:
+        contains:
+          - "data.users.total"
+          - "data.users.active"
+          - "data.users.inactive"
+          - "data.revenue.currency"
+          - "data.revenue.monthly"
+          - "data.revenue.yearly"
+
+  get_text_body:
+    response:
+      status: 200
+      body: "{\"message\":\"This is JSON but content-type is wrong\"}"
+
+  get_broken_json:
+    response:
+      status: 200
+      body: "{\"message\": \"invalid json\", }"
 
 paths:
-  /get:
-    get:
-      summary: Echo request
-      responses:
-        '200':
-          description: OK
-      v-functional-test:
-        scenarios: ["simple_get", "simple_get_query"]
-
-  /basic-auth/{user}/{passwd}:
-    get:
-      summary: Prompts the user for authorization using HTTP Basic Auth.
-      responses:
-        '200':
-          description: OK
-      v-functional-test:
-        scenarios: ["invalid_user", "valid_user"]
-
-  /bearer:
-    get:
-      summary: Prompts the user for authorization using bearer authentication.
-      responses:
-        '200':
-          description: OK
-
-      v-functional-test:
-        scenarios: ["invalid_token", "valid_token"]
-  /post:
+  /auth/login:
     post:
-      summary: The request's POST parametersx.
+      summary: login with api
       responses:
         '200':
           description: OK
       v-functional-test:
-        scenarios: ["create_post"]
-  /put:
+        scenarios: ["valid_login", "invalid_login"]
+
+  /users:
+    get:
+      summary: get all users
+      responses:
+        '200':
+          description: OK
+      v-functional-test:
+        scenarios: ["get_users", "get_user_unauthorized"]
+    post:
+      summary: create user
+      responses:
+        '201':
+          description: OK
+      v-functional-test:
+        scenarios: ["create_user", "create_invalid_user"]
+
+  /users/{id}:
+    get:
+      summary: get user by id
+      responses:
+        '200':
+          description: OK
+      v-functional-test:
+        scenarios: ["get_user_by_id", "get_user_by_invalid_id"]
     put:
-      summary: The request's PUT parameters.
+      summary: update user by id
       responses:
         '200':
           description: OK
       v-functional-test:
-        scenarios: ["put_post"]
-  /delete:
+        scenarios: ["update_user"]
     delete:
-      summary: The request's DELETE parameters.
+      summary: delete user by id
+      responses:
+        '204':
+          description: OK
+      v-functional-test:
+        scenarios: ["delete_user"]
+
+  /search/users:
+    get:
+      summary: search user by status
       responses:
         '200':
           description: OK
       v-functional-test:
-        scenarios: ["delete_post"]
-  /patch:
-    patch:
-      summary: The request's PATCH parameters.
+        scenarios: ["search_user"]
+
+  /reports:
+    get:
+      summary: get all reports
       responses:
         '200':
           description: OK
       v-functional-test:
-        scenarios: ["put_post"]
+        scenarios: ["get_reports", "get_reports_error"]
+
+  /dashboard/stats:
+    get:
+      summary: get all stats
+      responses:
+        '200':
+          description: OK
+      v-functional-test:
+        scenarios: ["get_dashboard_stats"]
+
+  /broken/content-type:
+    get:
+      summary: wrong content type
+      responses:
+        '200':
+          description: OK
+      v-functional-test:
+        scenarios: ["get_text_body"]
+
+  /broken/json:
+    get:
+      summary: broken json text
+      responses:
+        '200':
+          description: OK
+      v-functional-test:
+        scenarios: ["get_broken_json"]
